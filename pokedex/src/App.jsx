@@ -1,9 +1,16 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import './App.css'
 
 function App() {
   const [pokemon, setPokemon] = useState(null)
   console.log("render")
+
+  useEffect(() => {
+    console.log("Effect rendered")
+    fetch("https://pokeapi.co/api/v2/pokemon/pikachu")
+        .then(res => res.json())
+        .then(data => setPokemon(data))
+  }, [])
 
 {/*fetch("https://pokeapi.co/api/v2/pokemon/pikachu")
     .then(res => res.json())
