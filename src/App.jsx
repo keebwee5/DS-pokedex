@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react'
-import { collection, doc, getDocs, setDoc } from 'firebase/firestore'
-import { db } from './firebase'
 import { PokemonCard } from './components/PokemonCard'
-import { normalizar } from './pokemon'
+import { puedeAgregar } from './logic/equipoRules'
+import { guardarPokemon, cargarEquipo } from './data/equipoStore'
+import { buscarPokemon, listarPokemones } from './data/pokemonApi'
+
 import './App.css'
 
-const API = "https://pokeapi.co/api/v2"
 const LIMITE = 25 // pokemones por página
 
 function App() {
@@ -23,11 +23,11 @@ function App() {
   const [consulta, setConsulta] = useState('')  // lo que se busca ('' = ver la lista)
 
   async function agregar(p){
-    if (equipo.length >= 6) return
-    if (equipo.some((e) => e.id === p.id)) return
+    if (!puedeAgregar(equipo, p)) return 
+
     try {
       setErrorEquipo(null)
-      await setDoc(doc(db, 'equipo', String(p.id)), p)
+      await guardarPokemon(p)
       setEquipo([...equipo, p])
     } catch (err) {
       setErrorEquipo(`No se pudo guardar en el equipo: ${err.message}`)
@@ -52,23 +52,15 @@ function App() {
       setError(null)
       try {
         if (consulta) {
-          const res = await fetch(`${API}/pokemon/${consulta}`)
-          if (!res.ok) throw new Error(`Pokemon no encontrado (${res.status})`)
-          const data = await res.json()
-          if (!cancelado) setPokemones([normalizar(data)])
+          const pokemon = await buscarPokemon(consulta)
+          if (!cancelado) setPokemones([pokemon])
         } else {
           // 1. La lista solo trae { name, url } de cada pokemon
-          const res = await fetch(`${API}/pokemon?limit=${LIMITE}&offset=${offset}`)
-          if (!res.ok) throw new Error(`Error al cargar la lista (${res.status})`)
-          const lista = await res.json()
+          const resultado = await listarPokemones(offset, LIMITE)                
 
-          // 2. Pedimos el detalle de los 25 en paralelo
-          const detalles = await Promise.all(
-            lista.results.map(p => fetch(p.url).then(r => r.json()))
-          )
           if (!cancelado) {
-            setTotal(lista.count)
-            setPokemones(detalles.map(normalizar))
+            setTotal(resultado.total)
+            setPokemones(resultado.pokemones)
           }
         }
       } catch (err) {
@@ -83,10 +75,8 @@ function App() {
   }, [offset, consulta])
 
   useEffect(() => {
-    getDocs(collection(db, "equipo"))
-    .then((snap) => 
-      setEquipo(snap.docs.map((d) => ({tipos: [], ...d.data(), id: Number(d.id)})))
-    )
+    cargarEquipo()
+    .then((pokemones) => setEquipo(pokemones))
     .catch((e) => setErrorEquipo(`No se pudo cargar el equipo: ${e.message}`))
   }, [])
 
